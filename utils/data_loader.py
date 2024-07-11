@@ -5,7 +5,6 @@ from torchio.data.io import sitk_to_nib
 import torch
 import numpy as np
 import os
-import torch
 import SimpleITK as sitk
 from prefetch_generator import BackgroundGenerator
 

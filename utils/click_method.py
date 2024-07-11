@@ -1,7 +1,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
+from torch import Tensor
 import torch.nn.functional as F
+from typing import List, Tuple
+import edt
 
 
 def get_next_click3D_torch_no_gt(prev_seg, img3D, threshold=170):
@@ -29,7 +32,6 @@ def get_next_click3D_torch_no_gt(prev_seg, img3D, threshold=170):
     # fp_masks = torch.logical_and(torch.logical_not(likely_masks), pred_masks)
 
     for i in range(prev_seg.shape[0]):  # , desc="generate points":
-
         fn_points = torch.argwhere(fn_masks[i])
         point = None
         if len(fn_points) > 0:
@@ -59,7 +61,7 @@ def get_next_click3D_torch_no_gt(prev_seg, img3D, threshold=170):
 
 
 def get_next_click3D_torch_no_gt_naive(prev_seg):
-    """Selects prompt clicks from the area outside predicted masks based on previous segmentation (prev_seg). 
+    """Selects prompt clicks from the area outside predicted masks based on previous segmentation (prev_seg).
 
     Args:
         prev_seg (torch.tensor): segmentation masks from previous iteration
@@ -75,13 +77,11 @@ def get_next_click3D_torch_no_gt_naive(prev_seg):
     batch_labels = []
 
     pred_masks = prev_seg > mask_threshold
-    uncertain_masks = torch.logical_xor(
-        pred_masks, pred_masks
-    )  # init with all False
+    uncertain_masks = torch.logical_xor(pred_masks, pred_masks)  # init with all False
 
     for i in range(prev_seg.shape[0]):
         uncertain_region = torch.logical_or(uncertain_masks[i, 0], pred_masks[i, 0])
-        points = torch.argwhere(uncertain_region) # select outside of pred mask
+        points = torch.argwhere(uncertain_region)  # select outside of pred mask
 
         if len(points) > 0:
             point = points[np.random.randint(len(points))]
@@ -106,7 +106,6 @@ def get_next_click3D_torch_no_gt_naive(prev_seg):
 
 
 def get_next_click3D_torch(prev_seg, gt_semantic_seg):
-
     mask_threshold = 0.5
 
     batch_points = []
@@ -119,7 +118,6 @@ def get_next_click3D_torch(prev_seg, gt_semantic_seg):
     fp_masks = torch.logical_and(torch.logical_not(true_masks), pred_masks)
 
     for i in range(gt_semantic_seg.shape[0]):  # , desc="generate points":
-
         fn_points = torch.argwhere(fn_masks[i])
         fp_points = torch.argwhere(fp_masks[i])
         point = None
@@ -157,9 +155,6 @@ def get_next_click3D_torch(prev_seg, gt_semantic_seg):
         batch_labels.append(bl)
 
     return batch_points, batch_labels  # , (sum(dice_list)/len(dice_list)).item()
-
-
-import edt
 
 
 def get_next_click3D_torch_ritm(prev_seg, gt_semantic_seg):
@@ -216,45 +211,56 @@ def get_next_click3D_torch_ritm(prev_seg, gt_semantic_seg):
     return batch_points, batch_labels  # , (sum(dice_list)/len(dice_list)).item()
 
 
-def get_next_click3D_torch_2(prev_seg, gt_semantic_seg):
+def get_next_click3D_torch_2(
+    prev_seg: Tensor, gt_semantic_seg: Tensor
+) -> Tuple[List[Tensor], List[Tensor]]:
+    """
+    根据前一次的分割结果和真实的分割标签，确定下一个点击点的坐标和标签。
+
+    :param prev_seg: 上一次的分割预测结果，一个3D张量。
+    :param gt_semantic_seg: 真实的分割标签，一个3D张量。
+    :return: 点击点的坐标列表和对应的标签列表。
+    """
 
     mask_threshold = 0.5
 
-    batch_points = []
-    batch_labels = []
-    # dice_list = []
+    batch_points = []  # 存储点击点坐标的列表
+    batch_labels = []  # 存储点击点标签的列表
 
+    # 使用阈值确定预测掩码
     pred_masks = prev_seg > mask_threshold
+    # 确定真实的掩码
     true_masks = gt_semantic_seg > 0
+    # 找出假阴性掩码
     fn_masks = torch.logical_and(true_masks, torch.logical_not(pred_masks))
+    # 找出假阳性掩码
     fp_masks = torch.logical_and(torch.logical_not(true_masks), pred_masks)
 
+    # 确定需要点击的点的掩码
     to_point_mask = torch.logical_or(fn_masks, fp_masks)
 
+    # 遍历每个批次中的样本
     for i in range(gt_semantic_seg.shape[0]):
-
+        # 找出所有需要点击的点
         points = torch.argwhere(to_point_mask[i])
-        point = points[np.random.randint(len(points))]
-        # import pdb; pdb.set_trace()
-        if fn_masks[i, 0, point[1], point[2], point[3]]:
-            is_positive = True
-        else:
-            is_positive = False
+        if points.numel() > 0:  # 如果存在需要点击的点
+            point = points[torch.randint(0, len(points), (1,))]
 
-        bp = point[1:].clone().detach().reshape(1, 1, 3)
-        bl = torch.tensor(
-            [
-                int(is_positive),
-            ]
-        ).reshape(1, 1)
-        batch_points.append(bp)
-        batch_labels.append(bl)
+            # 确定点击点是假阴性还是假阳性
+            is_positive = fn_masks[i, 0, point[0], point[1], point[2]].item()
 
-    return batch_points, batch_labels  # , (sum(dice_list)/len(dice_list)).item()
+            # 将点的坐标添加到列表中
+            bp = point.clone().detach().reshape(1, 1, 3)
+            # 将标签添加到列表中
+            bl = torch.tensor([int(is_positive)]).reshape(1, 1)
+            batch_points.append(bp)
+            batch_labels.append(bl)
+
+    # 返回点击点的坐标和标签列表
+    return batch_points, batch_labels
 
 
 def get_next_click3D_torch_with_dice(prev_seg, gt_semantic_seg):
-
     def compute_dice(mask_pred, mask_gt):
         mask_threshold = 0.5
 
@@ -280,7 +286,6 @@ def get_next_click3D_torch_with_dice(prev_seg, gt_semantic_seg):
     fp_masks = torch.logical_and(torch.logical_not(true_masks), pred_masks)
 
     for i in range(gt_semantic_seg.shape[0]):
-
         fn_points = torch.argwhere(fn_masks[i])
         fp_points = torch.argwhere(fp_masks[i])
         if len(fn_points) > 0 and len(fp_points) > 0:
