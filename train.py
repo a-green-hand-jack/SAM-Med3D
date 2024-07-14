@@ -5,8 +5,6 @@ import datetime
 import logging
 import matplotlib.pyplot as plt
 import os
-
-join = os.path.join
 from tqdm import tqdm
 from torch.backends import cudnn
 import torch
@@ -25,6 +23,7 @@ from utils.click_method import get_next_click3D_torch_2
 from utils.data_loader import Dataset_Union_ALL, Union_Dataloader
 from utils.data_paths import img_datas
 
+join = os.path.join
 
 # %% set up parser
 parser = argparse.ArgumentParser()

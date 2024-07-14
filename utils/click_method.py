@@ -16,7 +16,7 @@ def get_next_click3D_torch_no_gt(prev_seg, img3D, threshold=170):
         threshold (int, optional): threshold value to apply to image for selecting point click. Defaults to 170.
 
     Returns:
-        batch_points (list of torch.tensor): list of points to click
+        batch_points (list of torch.tensor): list of points to clickk
         batch_labels (list of torch.tensor): list of labels corresponding to the points
         NOTE: In this case, the labels are based on the thresholded image and not the ground truth.
     """
